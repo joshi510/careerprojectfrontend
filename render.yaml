@@ -1,0 +1,44 @@
+services:
+  # Backend API Service
+  - type: web
+    name: career-profiling-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: DEBUG
+        value: false
+
+  # Frontend Static Site
+  - type: web
+    name: career-profiling-frontend
+    env: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: NODE_VERSION
+        value: 18.17.0
+
+databases:
+  # PostgreSQL Database
+  - name: career-profiling-db
+    databaseName: career_profiling_db
+    user: career_profiling_user
+    plan: free
+
