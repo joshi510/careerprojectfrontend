@@ -6,8 +6,6 @@ if (!API_BASE) {
   );
 }
 
-const API_BASE = 'http://127.0.0.1:8001';
-
 class AuthService {
   getToken() {
     return localStorage.getItem('token');
