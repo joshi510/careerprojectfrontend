@@ -14,7 +14,7 @@ function SectionTestFlow({ attemptId, initialSection, onSectionComplete, onCompl
   const [timerInterval, setTimerInterval] = useState(null);
   const [sectionCompleted, setSectionCompleted] = useState(false);
   const [timeUp, setTimeUp] = useState(false); // Track when timer expires
-  const [focusedOptionIndex, setFocusedOptionIndex] = useState(0);
+  const [focusedOptionIndex, setFocusedOptionIndex] = useState(-1);
   const optionRefs = useRef([]);
   const submitSectionRef = useRef(null);
 
@@ -47,7 +47,7 @@ function SectionTestFlow({ attemptId, initialSection, onSectionComplete, onCompl
     try {
       setLoading(true);
       setError('');
-      
+
       // For auto-submit, fill missing answers with default 'C'
       const answersArray = questions.map(q => ({
         question_id: Number(q.question_id),
@@ -55,18 +55,18 @@ function SectionTestFlow({ attemptId, initialSection, onSectionComplete, onCompl
       }));
 
       await testAPI.submitSection(currentSection.id, attemptId, answersArray);
-      
+
       setSectionCompleted(true);
-      
+
       // Reload sections to get updated status
       const updatedSectionsData = await testAPI.getSections(attemptId);
       // Handle both response formats: {sections: [...]} or [...]
       const updatedSections = Array.isArray(updatedSectionsData) ? updatedSectionsData : (updatedSectionsData.sections || []);
       setSections(updatedSections.sort((a, b) => a.order_index - b.order_index));
-      
+
       // Find next section (order_index + 1)
       const nextSection = updatedSections.find(s => s.order_index === currentSection.order_index + 1);
-      
+
       if (nextSection) {
         // Auto-transition to next section after brief delay (NO manual navigation)
         setTimeout(() => {
@@ -118,7 +118,7 @@ function SectionTestFlow({ attemptId, initialSection, onSectionComplete, onCompl
   const handleAnswer = (questionId, option) => {
     // Prevent answering if time is up
     if (timeUp) return;
-    
+
     const qId = Number(questionId);
     setAnswers({
       ...answers,
@@ -129,11 +129,11 @@ function SectionTestFlow({ attemptId, initialSection, onSectionComplete, onCompl
   const handleTimeUp = async () => {
     // Prevent multiple calls
     if (timeUp || sectionCompleted) return;
-    
+
     console.log('⏰ Time limit reached! Auto-submitting section...');
     setTimeUp(true);
     setError('Time limit reached! Section is being submitted automatically...');
-    
+
     // Disable all inputs immediately
     // Auto-submit section with current answers (fill missing with default)
     await submitSection(true); // Pass autoSubmit flag
@@ -209,7 +209,7 @@ function SectionTestFlow({ attemptId, initialSection, onSectionComplete, onCompl
 
   const updateTimer = async () => {
     if (!currentSection || !attemptId || timeUp || sectionCompleted) return;
-    
+
     try {
       // Use the timer endpoint which enforces 6-minute limit
       const status = await testAPI.getSectionTimer(attemptId, currentSection.id);
@@ -220,22 +220,22 @@ function SectionTestFlow({ attemptId, initialSection, onSectionComplete, onCompl
           isPaused: status.is_paused || false,
           currentTime: currentTime
         });
-        
-        // Check if time limit reached (360 seconds = 6 minutes)
-        const remainingTime = 360 - currentTime;
+
+        // Check if time limit reached (420 seconds = 7 minutes)
+        const remainingTime = 420 - currentTime;
         if (remainingTime <= 0 && !timeUp && !sectionCompleted) {
           // Time limit reached - auto-submit
           handleTimeUp();
           return;
         }
-        
+
         // Check if time limit exceeded (auto-completed by backend)
-        if (status.status === 'COMPLETED' && status.current_time >= 360 && !sectionCompleted) {
+        if (status.status === 'COMPLETED' && status.current_time >= 420 && !sectionCompleted) {
           // Time limit exceeded, backend already marked as completed
           // Auto-transition to next section
           setSectionCompleted(true);
           setError('Time limit exceeded. Moving to next section...');
-          
+
           // Reload sections and find next section
           setTimeout(async () => {
             try {
@@ -243,9 +243,9 @@ function SectionTestFlow({ attemptId, initialSection, onSectionComplete, onCompl
               // Handle both response formats: {sections: [...]} or [...]
               const updatedSections = Array.isArray(updatedSectionsData) ? updatedSectionsData : (updatedSectionsData.sections || []);
               setSections(updatedSections.sort((a, b) => a.order_index - b.order_index));
-              
+
               const nextSection = updatedSections.sections.find(s => s.order_index === currentSection.order_index + 1);
-              
+
               if (nextSection) {
                 setCurrentSection(nextSection);
                 setAnswers({});
@@ -296,7 +296,7 @@ function SectionTestFlow({ attemptId, initialSection, onSectionComplete, onCompl
   // Output: [{key: "A", label: "Strongly Disagree"}, {key: "B", label: "Disagree"}, ...]
   const parseOptions = (optionsInput) => {
     if (!optionsInput) return [];
-    
+
     // If already an array, return as-is (with proper formatting)
     if (Array.isArray(optionsInput)) {
       return optionsInput
@@ -307,11 +307,11 @@ function SectionTestFlow({ attemptId, initialSection, onSectionComplete, onCompl
         }))
         .filter(opt => opt.label !== '' && opt.key !== ''); // Remove empty labels/keys
     }
-    
+
     // Try to parse as JSON string first (in case array was stringified)
     if (typeof optionsInput === 'string' && optionsInput.trim()) {
       const trimmed = optionsInput.trim();
-      
+
       // Check if it's a JSON array
       if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
         try {
@@ -329,22 +329,22 @@ function SectionTestFlow({ attemptId, initialSection, onSectionComplete, onCompl
           // Not valid JSON, continue with string parsing
         }
       }
-      
+
       // Parse string format: "A) Strongly Disagree, B) Disagree, C) Neutral, D) Agree, E) Strongly Agree"
       const options = [];
-      
+
       // Split by comma, but be smart about it - look for pattern ", A)", ", B)", etc.
       // This handles cases where option text might contain commas
       // Use a more robust regex that matches "A) Text" or "A. Text" patterns
       const parts = trimmed.split(/,\s*(?=[A-E][\)\.])/);
-      
+
       // Parse each part with pattern: ^([A-E])[\)\.]\s*(.+)$
       const optionPattern = /^([A-E])[\)\.]\s*(.+)$/i;
-      
+
       for (const part of parts) {
         const trimmedPart = part.trim();
         if (!trimmedPart) continue;
-        
+
         const match = trimmedPart.match(optionPattern);
         if (match) {
           const key = match[1].toUpperCase().trim();
@@ -354,7 +354,7 @@ function SectionTestFlow({ attemptId, initialSection, onSectionComplete, onCompl
           }
         }
       }
-      
+
       // If no options were parsed, try alternative parsing method
       if (options.length === 0) {
         // Try splitting by comma and looking for letter patterns
@@ -370,10 +370,10 @@ function SectionTestFlow({ attemptId, initialSection, onSectionComplete, onCompl
           }
         }
       }
-      
+
       return options;
     }
-    
+
     return [];
   };
 
@@ -383,7 +383,7 @@ function SectionTestFlow({ attemptId, initialSection, onSectionComplete, onCompl
     if (!currentQuestion) {
       return [];
     }
-    
+
     // Try parsing from options field (string or array)
     if (currentQuestion.options !== undefined && currentQuestion.options !== null) {
       const parsed = parseOptions(currentQuestion.options);
@@ -391,7 +391,7 @@ function SectionTestFlow({ attemptId, initialSection, onSectionComplete, onCompl
         return parsed;
       }
     }
-    
+
     // Fallback: try legacy format option_a, option_b, option_c, option_d
     if (currentQuestion.option_a || currentQuestion.option_b || currentQuestion.option_c || currentQuestion.option_d) {
       return [
@@ -401,7 +401,7 @@ function SectionTestFlow({ attemptId, initialSection, onSectionComplete, onCompl
         { key: 'D', label: (currentQuestion.option_d || '').trim() }
       ].filter(opt => opt.label !== '');
     }
-    
+
     // No options found
     console.warn('getAvailableOptions - No options found for question:', currentQuestion.question_id);
     return [];
@@ -414,7 +414,7 @@ function SectionTestFlow({ attemptId, initialSection, onSectionComplete, onCompl
   };
 
   const getRemainingTime = () => {
-    const SECTION_TIME_LIMIT = 360; // 6 minutes in seconds
+    const SECTION_TIME_LIMIT = 420; // 7 minutes in seconds
     const remaining = SECTION_TIME_LIMIT - timer.currentTime;
     return Math.max(0, remaining);
   };
@@ -476,7 +476,7 @@ function SectionTestFlow({ attemptId, initialSection, onSectionComplete, onCompl
               ...prevAnswers,
               [qId]: optionKey
             };
-            
+
             // After selecting with Enter, move to next question if not last
             if (e.key === 'Enter') {
               setTimeout(() => {
@@ -498,7 +498,7 @@ function SectionTestFlow({ attemptId, initialSection, onSectionComplete, onCompl
                 }
               }, 150);
             }
-            
+
             return newAnswers;
           });
         }
@@ -537,15 +537,23 @@ function SectionTestFlow({ attemptId, initialSection, onSectionComplete, onCompl
   }, [currentSection, attemptId]);
 
   useEffect(() => {
-    // Update timer every second if running
-    if (!timer.isPaused && currentSection && !timeUp && !sectionCompleted) {
+    // Update timer locally every second if running, BUT ONLY if questions are loaded
+    if (!timer.isPaused && currentSection && !timeUp && !sectionCompleted && !loading && questions.length > 0) {
       const interval = setInterval(() => {
-        updateTimer();
+        setTimer(prev => ({ ...prev, currentTime: prev.currentTime + 1 }));
       }, 1000);
       setTimerInterval(interval);
       return () => clearInterval(interval);
     }
-  }, [timer.isPaused, currentSection, timeUp, sectionCompleted]);
+  }, [timer.isPaused, currentSection, timeUp, sectionCompleted, loading, questions.length]);
+
+  // Check for time limit locally
+  useEffect(() => {
+    const SECTION_TIME_LIMIT = 420; // 7 minutes
+    if (timer.currentTime >= SECTION_TIME_LIMIT && !timeUp && !sectionCompleted) {
+      handleTimeUp();
+    }
+  }, [timer.currentTime, timeUp, sectionCompleted]);
 
   // Store submitSection in ref
   useEffect(() => {
@@ -555,11 +563,7 @@ function SectionTestFlow({ attemptId, initialSection, onSectionComplete, onCompl
   // Reset focus when question changes
   useEffect(() => {
     if (currentQuestion) {
-      setFocusedOptionIndex(0);
-      // Auto-focus first option when question loads
-      setTimeout(() => {
-        optionRefs.current[0]?.focus();
-      }, 100);
+      setFocusedOptionIndex(-1);
     }
   }, [currentQuestionIndex, currentQuestion?.question_id]);
 
@@ -660,13 +664,12 @@ function SectionTestFlow({ attemptId, initialSection, onSectionComplete, onCompl
           {sections.map((section, idx) => (
             <div
               key={section.id}
-              className={`flex-1 h-1.5 rounded ${
-                section.id === currentSection.id
-                  ? 'bg-blue-600'
-                  : section.status === 'COMPLETED'
+              className={`flex-1 h-1.5 rounded ${section.id === currentSection.id
+                ? 'bg-blue-600'
+                : section.status === 'COMPLETED'
                   ? 'bg-green-500'
                   : 'bg-slate-200 dark:bg-slate-700'
-              }`}
+                }`}
               title={section.name}
             />
           ))}
@@ -727,41 +730,40 @@ function SectionTestFlow({ attemptId, initialSection, onSectionComplete, onCompl
                 const availableOptions = getAvailableOptions();
                 if (availableOptions.length > 0) {
                   return availableOptions.map((option, idx) => {
-                const optionKey = option.key || option.value;
-                const isSelected = answers[currentQuestion.question_id] === optionKey;
-                const isFocused = focusedOptionIndex === idx;
+                    const optionKey = option.key || option.value;
+                    const isSelected = answers[currentQuestion.question_id] === optionKey;
+                    const isFocused = focusedOptionIndex === idx;
 
-                return (
-                  <button
-                    key={idx}
-                    ref={el => optionRefs.current[idx] = el}
-                    onClick={() => {
-                      if (!timeUp) {
-                        handleAnswer(currentQuestion.question_id, option.key || option.value);
-                        setFocusedOptionIndex(idx);
-                      }
-                    }}
-                    onFocus={() => !timeUp && setFocusedOptionIndex(idx)}
-                    role="radio"
-                    aria-checked={isSelected}
-                    tabIndex={timeUp ? -1 : (isFocused ? 0 : -1)}
-                    disabled={timeUp}
-                    className={`w-full text-left p-3 rounded-lg border-2 transition-all outline-none ${
-                      timeUp
-                        ? 'border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-700 cursor-not-allowed opacity-60'
-                        : isSelected
-                        ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20'
-                        : isFocused
-                        ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/10 ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-slate-800'
-                        : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'
-                    } ${!timeUp ? 'focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-800 focus:border-blue-500' : ''}`}
-                  >
-                    <span className="font-medium text-sm sm:text-base text-slate-900 dark:text-slate-100">
-                      {(option.key || option.value || '').toUpperCase()}. {String(option.label || option.text || '').trim()}
-                    </span>
-                  </button>
-                  );
-                });
+                    return (
+                      <button
+                        key={idx}
+                        ref={el => optionRefs.current[idx] = el}
+                        onClick={() => {
+                          if (!timeUp) {
+                            handleAnswer(currentQuestion.question_id, option.key || option.value);
+                            setFocusedOptionIndex(idx);
+                          }
+                        }}
+                        onFocus={() => !timeUp && setFocusedOptionIndex(idx)}
+                        role="radio"
+                        aria-checked={isSelected}
+                        tabIndex={timeUp ? -1 : (isFocused ? 0 : -1)}
+                        disabled={timeUp}
+                        className={`w-full text-left p-3 rounded-lg border-2 transition-all outline-none ${timeUp
+                          ? 'border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-700 cursor-not-allowed opacity-60'
+                          : isSelected
+                            ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20'
+                            : isFocused
+                              ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/10 ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-slate-800'
+                              : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'
+                          } ${!timeUp ? 'focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-800 focus:border-blue-500' : ''}`}
+                      >
+                        <span className="font-medium text-sm sm:text-base text-slate-900 dark:text-slate-100">
+                          {(option.key || option.value || '').toUpperCase()}. {String(option.label || option.text || '').trim()}
+                        </span>
+                      </button>
+                    );
+                  });
                 } else {
                   return (
                     <div className="text-center py-8 text-slate-500 dark:text-slate-400">

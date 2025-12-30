@@ -6,7 +6,7 @@ const API_BASE = import.meta.env.VITE_API_URL;
 async function apiRequest(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
   const token = authService.getToken();
-  
+
   const headers = {
     'Content-Type': 'application/json',
     ...(token && { Authorization: `Bearer ${token}` }),
@@ -19,7 +19,7 @@ async function apiRequest(endpoint, options = {}) {
   };
 
   const response = await fetch(url, config);
-  
+
   if (response.status === 401) {
     authService.logout();
     window.location.href = '/login';
@@ -74,7 +74,7 @@ export const testAPI = {
   getSectionTimer: (attemptId, sectionId) => apiRequest(`/test/sections/${sectionId}/timer?attempt_id=${attemptId}`),
   getTestStatus: (attemptId) => apiRequest(`/test/${attemptId}/status`),
   completeTest: (attemptId, autoSubmit = false) => {
-    const url = autoSubmit 
+    const url = autoSubmit
       ? `/test/${attemptId}/complete?auto_submit=true`
       : `/test/${attemptId}/complete`;
     return apiRequest(url, { method: 'POST' });
